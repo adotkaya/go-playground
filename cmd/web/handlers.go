@@ -56,6 +56,8 @@ func (app *application) snippetCreate(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) snippetCreatePost(w http.ResponseWriter, r *http.Request) {
 
+	// ParseForm() is limited by 10mb, if need more; use http.MaxBytesReader() before ParseForm().
+	// ex: r.Body = http.MaxBytesReader(w,r.Body,4096) then keep going (4096 bytes example code)
 	err := r.ParseForm()
 	if err != nil {
 		app.clientError(w, http.StatusBadRequest)
