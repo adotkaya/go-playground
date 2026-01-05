@@ -18,10 +18,24 @@ func (app *application) routes() http.Handler {
 	fileServer := http.FileServer(http.Dir("./ui/static/"))
 	router.Handler(http.MethodGet, "/static/*filepath", http.StripPrefix("/static", fileServer))
 
-	router.HandlerFunc(http.MethodGet, "/", app.home)
-	router.HandlerFunc(http.MethodGet, "/snippet/view/:id", app.snippetView)
-	router.HandlerFunc(http.MethodGet, "/snippet/create", app.snippetCreate)
-	router.HandlerFunc(http.MethodPost, "/snippet/create", app.snippetCreatePost)
+	dynamic := alice.New(app.sessionManager.LoadAndSave)
+
+	/* 	If you’re not using the justinas/alice package to help manage your
+	middleware chains, then you’d need to use the http.HandlerFunc()
+	adapter to convert your handler functions like app.home to a
+	http.Handler, and then wrap that with session middleware instead.
+	Like this:
+	router := httprouter.New()
+	router.Handler(http.MethodGet, "/",
+	app.sessionManager.LoadAndSave(http.HandlerFunc(app.home)))
+	router.Handler(http.MethodGet, "/snippet/view/:id",
+	app.sessionManager.LoadAndSave(http.HandlerFunc(app.snippetView)))
+	*/
+
+	router.Handler(http.MethodGet, "/", dynamic.ThenFunc(app.home))
+	router.Handler(http.MethodGet, "/snippet/view/:id", dynamic.ThenFunc(app.snippetView))
+	router.Handler(http.MethodGet, "/snippet/create", dynamic.ThenFunc(app.snippetCreate))
+	router.Handler(http.MethodPost, "/snippet/create", dynamic.ThenFunc(app.snippetCreatePost))
 
 	standart := alice.New(app.recoverPanic, app.logRequest, secureHeaders)
 
