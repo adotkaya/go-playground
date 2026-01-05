@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"adotkaya.playground/internal/models"
+	"adotkaya.playground/internal/validator"
 	"github.com/julienschmidt/httprouter"
 )
 
 type SnippetCreateForm struct {
-	Title       string
-	Content     string
-	Expires     int
-	FieldErrors map[string]string
+	Title   string
+	Content string
+	Expires int
+	validator.Validator
 }
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +58,11 @@ func (app *application) snippetView(w http.ResponseWriter, r *http.Request) {
 func (app *application) snippetCreate(w http.ResponseWriter, r *http.Request) {
 	{
 		data := app.newTemplateData(r)
+
+		data.Form = SnippetCreateForm{
+			Expires: 365,
+		}
+
 		app.render(w, http.StatusOK, "create.tmpl", data)
 	}
 }
@@ -81,24 +86,17 @@ func (app *application) snippetCreatePost(w http.ResponseWriter, r *http.Request
 	}
 
 	form := SnippetCreateForm{
-		Title:       r.PostForm.Get("title"),
-		Content:     r.PostForm.Get("content"),
-		Expires:     expires,
-		FieldErrors: map[string]string{},
+		Title:   r.PostForm.Get("title"),
+		Content: r.PostForm.Get("content"),
+		Expires: expires,
 	}
 
 	// Validate if not empty
-	if strings.TrimSpace(form.Title) == "" {
-		form.FieldErrors["title"] = "This field cannot be empty."
-	}
-	if strings.TrimSpace(form.Content) == "" {
-		form.FieldErrors["content"] = "This field cannot be empty."
-	}
-	if form.Expires != 1 && form.Expires != 7 && form.Expires != 365 {
-		form.FieldErrors["expires"] = "This field must be 1, 7 or 365."
-	}
+	form.CheckField(validator.NotBlank(form.Title), "title", "This field cannot be blank.")
+	form.CheckField(validator.NotBlank(form.Content), "content", "This field cannot be blank")
+	form.CheckField(validator.PermittedInt(form.Expires, 1, 7, 365), "expires", "This field must either 1, 7 or 365")
 
-	if len(form.FieldErrors) > 0 {
+	if !form.Valid() {
 		data := app.newTemplateData(r)
 		data.Form = form
 		app.render(w, http.StatusUnprocessableEntity, "create.tmpl", data)
