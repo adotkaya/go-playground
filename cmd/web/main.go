@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -10,17 +9,20 @@ import (
 	"time"
 
 	"adotkaya.playground/internal/models"
+	"github.com/alexedwards/scs/pgxstore"
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-playground/form/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
 type application struct {
-	errorLog      *log.Logger
-	infoLog       *log.Logger
-	snippets      *models.SnippetModel
-	templateCache map[string]*template.Template
-	formDecoder   *form.Decoder
+	errorLog       *log.Logger
+	infoLog        *log.Logger
+	snippets       *models.SnippetModel
+	templateCache  map[string]*template.Template
+	formDecoder    *form.Decoder
+	sessionManager *scs.SessionManager
 }
 
 func main() {
@@ -58,13 +60,17 @@ func main() {
 	}
 
 	formDecoder := form.NewDecoder()
+	sessionManager := scs.New()
+	sessionManager.Store = pgxstore.New(pool)
+	sessionManager.Lifetime = 12 * time.Hour
 
 	app := &application{
-		errorLog:      errorLog,
-		infoLog:       infoLog,
-		snippets:      &models.SnippetModel{DB: pool},
-		templateCache: templateCache,
-		formDecoder:   formDecoder,
+		errorLog:       errorLog,
+		infoLog:        infoLog,
+		snippets:       &models.SnippetModel{DB: pool},
+		templateCache:  templateCache,
+		formDecoder:    formDecoder,
+		sessionManager: sessionManager,
 	}
 
 	srv := &http.Server{
@@ -76,36 +82,4 @@ func main() {
 	infoLog.Printf("Starting server on :4000")
 	err = srv.ListenAndServe()
 	errorLog.Fatal(err)
-}
-
-func loadDatabaseConfig(errorLog *log.Logger) string {
-	config := map[string]string{
-		"DB_USER":     os.Getenv("DB_USER"),
-		"DB_PASSWORD": os.Getenv("DB_PASSWORD"),
-		"DB_HOST":     os.Getenv("DB_HOST"),
-		"DB_PORT":     os.Getenv("DB_PORT"),
-		"DB_NAME":     os.Getenv("DB_NAME"),
-		"DB_SSLMODE":  os.Getenv("DB_SSLMODE"),
-	}
-
-	// Check for missing variables
-	missing := []string{}
-	for key, value := range config {
-		if value == "" {
-			missing = append(missing, key)
-		}
-	}
-
-	if len(missing) > 0 {
-		errorLog.Fatalf("Missing required environment variables: %v", missing)
-	}
-
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		config["DB_USER"],
-		config["DB_PASSWORD"],
-		config["DB_HOST"],
-		config["DB_PORT"],
-		config["DB_NAME"],
-		config["DB_SSLMODE"],
-	)
 }
