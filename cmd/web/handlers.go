@@ -12,10 +12,10 @@ import (
 )
 
 type SnippetCreateForm struct {
-	Title      string
-	Content    string
-	Expires    int
-	FieldErros map[string]string
+	Title       string
+	Content     string
+	Expires     int
+	FieldErrors map[string]string
 }
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
@@ -81,25 +81,24 @@ func (app *application) snippetCreatePost(w http.ResponseWriter, r *http.Request
 	}
 
 	form := SnippetCreateForm{
-		Title:      r.PostForm.Get("title"),
-		Content:    r.PostForm.Get("content"),
-		Expires:    expires,
-		FieldErros: map[string]string{},
+		Title:       r.PostForm.Get("title"),
+		Content:     r.PostForm.Get("content"),
+		Expires:     expires,
+		FieldErrors: map[string]string{},
 	}
 
 	// Validate if not empty
-	fieldErrors := make(map[string]string)
 	if strings.TrimSpace(form.Title) == "" {
-		fieldErrors["title"] = "This field cannot be empty."
+		form.FieldErrors["title"] = "This field cannot be empty."
 	}
 	if strings.TrimSpace(form.Content) == "" {
-		fieldErrors["content"] = "This field cannot be empty."
+		form.FieldErrors["content"] = "This field cannot be empty."
 	}
 	if form.Expires != 1 && form.Expires != 7 && form.Expires != 365 {
-		fieldErrors["expires"] = "This field must be 1, 7 or 365."
+		form.FieldErrors["expires"] = "This field must be 1, 7 or 365."
 	}
 
-	if len(fieldErrors) > 0 {
+	if len(form.FieldErrors) > 0 {
 		data := app.newTemplateData(r)
 		data.Form = form
 		app.render(w, http.StatusUnprocessableEntity, "create.tmpl", data)
