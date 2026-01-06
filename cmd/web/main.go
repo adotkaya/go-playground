@@ -76,11 +76,17 @@ func main() {
 		CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256},
 	}
 
+	//Always set IdleTimeout, if not
+	//ReadTimeout, WriteTimeout or any Timeout
+	//values will be set as default and would cut connection
 	srv := &http.Server{
-		Addr:      ":4000",
-		ErrorLog:  errorLog,
-		Handler:   app.routes(),
-		TLSConfig: tlsConfig,
+		Addr:         ":4000",
+		ErrorLog:     errorLog,
+		Handler:      app.routes(),
+		TLSConfig:    tlsConfig,
+		IdleTimeout:  time.Minute,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
 	}
 
 	infoLog.Printf("Starting server on :4000")
