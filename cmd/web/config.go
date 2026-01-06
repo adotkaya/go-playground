@@ -2,38 +2,104 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
+	"time"
 )
 
-func loadDatabaseConfig(errorLog *log.Logger) string {
-	config := map[string]string{
-		"DB_USER":     os.Getenv("DB_USER"),
-		"DB_PASSWORD": os.Getenv("DB_PASSWORD"),
-		"DB_HOST":     os.Getenv("DB_HOST"),
-		"DB_PORT":     os.Getenv("DB_PORT"),
-		"DB_NAME":     os.Getenv("DB_NAME"),
-		"DB_SSLMODE":  os.Getenv("DB_SSLMODE"),
+type Config struct {
+	Database DatabaseConfig
+	Server   ServerConfig
+}
+
+type DatabaseConfig struct {
+	User     string
+	Password string
+	Host     string
+	Port     string
+	Name     string
+	SSLMode  string
+}
+
+type ServerConfig struct {
+	Port         string
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	IdleTimeout  time.Duration
+}
+
+// LoadConfig loads and validates all configuration from environment variables
+func LoadConfig() (*Config, error) {
+	cfg := &Config{
+		Database: DatabaseConfig{
+			User:     os.Getenv("DB_USER"),
+			Password: os.Getenv("DB_PASSWORD"),
+			Host:     getEnvOrDefault("DB_HOST", "localhost"),
+			Port:     getEnvOrDefault("DB_PORT", "5432"),
+			Name:     os.Getenv("DB_NAME"),
+			SSLMode:  getEnvOrDefault("DB_SSLMODE", "disable"),
+		},
+		Server: ServerConfig{
+			Port:         getEnvOrDefault("SERVER_PORT", "4000"),
+			ReadTimeout:  parseDurationOrDefault("SERVER_READ_TIMEOUT", 5*time.Second),
+			WriteTimeout: parseDurationOrDefault("SERVER_WRITE_TIMEOUT", 10*time.Second),
+			IdleTimeout:  parseDurationOrDefault("SERVER_IDLE_TIMEOUT", time.Minute),
+		},
 	}
 
-	// Check for missing variables
+	// Validate required fields
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// Validate checks that all required configuration is present
+func (c *Config) Validate() error {
 	missing := []string{}
-	for key, value := range config {
-		if value == "" {
-			missing = append(missing, key)
-		}
+
+	if c.Database.User == "" {
+		missing = append(missing, "DB_USER")
+	}
+	if c.Database.Password == "" {
+		missing = append(missing, "DB_PASSWORD")
+	}
+	if c.Database.Name == "" {
+		missing = append(missing, "DB_NAME")
 	}
 
 	if len(missing) > 0 {
-		errorLog.Fatalf("Missing required environment variables: %v", missing)
+		return fmt.Errorf("missing required environment variables: %v", missing)
 	}
 
+	return nil
+}
+
+// DSN returns the PostgreSQL connection string
+func (c *DatabaseConfig) DSN() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		config["DB_USER"],
-		config["DB_PASSWORD"],
-		config["DB_HOST"],
-		config["DB_PORT"],
-		config["DB_NAME"],
-		config["DB_SSLMODE"],
+		c.User,
+		c.Password,
+		c.Host,
+		c.Port,
+		c.Name,
+		c.SSLMode,
 	)
+}
+
+// Helper functions
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func parseDurationOrDefault(key string, defaultValue time.Duration) time.Duration {
+	if value := os.Getenv(key); value != "" {
+		if duration, err := time.ParseDuration(value); err == nil {
+			return duration
+		}
+	}
+	return defaultValue
 }

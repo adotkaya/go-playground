@@ -36,11 +36,16 @@ func main() {
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
-	// Load database configuration (fails fast if anything is missing)
-	dsn := loadDatabaseConfig(errorLog)
+	// Load and validate configuration
+	cfg, err := LoadConfig()
+	if err != nil {
+		errorLog.Fatal("Configuration error:", err)
+	}
+
+	// Connect to database using the config
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
+	pool, err := pgxpool.New(ctx, cfg.Database.DSN())
 	if err != nil {
 		errorLog.Fatal("Unable to connect to database:", err)
 	}
@@ -59,6 +64,7 @@ func main() {
 
 	//load decoder
 	formDecoder := form.NewDecoder()
+	//load sessions manager
 	sessionManager := scs.New()
 	sessionManager.Store = pgxstore.New(pool)
 	sessionManager.Lifetime = 12 * time.Hour
@@ -72,6 +78,7 @@ func main() {
 		sessionManager: sessionManager,
 	}
 
+	//TLS
 	tlsConfig := &tls.Config{
 		CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256},
 	}
@@ -80,16 +87,16 @@ func main() {
 	//ReadTimeout, WriteTimeout or any Timeout
 	//values will be set as default and would cut connection
 	srv := &http.Server{
-		Addr:         ":4000",
+		Addr:         ":" + cfg.Server.Port,
 		ErrorLog:     errorLog,
 		Handler:      app.routes(),
 		TLSConfig:    tlsConfig,
-		IdleTimeout:  time.Minute,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  cfg.Server.IdleTimeout,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
 	}
 
-	infoLog.Printf("Starting server on :4000")
+	infoLog.Printf("Starting server on :%s", cfg.Server.Port)
 	err = srv.ListenAndServeTLS("./tls/cert.pem", "./tls/key.pem")
 	errorLog.Fatal(err)
 }
