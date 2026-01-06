@@ -57,7 +57,11 @@ func (app *application) render(w http.ResponseWriter, status int, page string, d
 }
 
 func (app *application) isAuthenticated(r *http.Request) bool {
-	return app.sessionManager.Exists(r.Context(), "authenticatedUserID")
+	isAuthenticated, ok := r.Context().Value(isAuthenticatedContextKey).(bool)
+	if !ok {
+		return false
+	}
+	return isAuthenticated
 }
 
 // app.formDecoder.Decode() requires non-nil pointers, if nil pointer checks than it will return form.InvalidDecodeError, so we need this func.
