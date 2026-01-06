@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"html/template"
 	"log"
 	"net/http"
@@ -37,28 +38,26 @@ func main() {
 
 	// Load database configuration (fails fast if anything is missing)
 	dsn := loadDatabaseConfig(errorLog)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		errorLog.Fatal("Unable to connect to database:", err)
 	}
 	defer pool.Close()
-
 	err = pool.Ping(ctx)
 	if err != nil {
 		errorLog.Fatal("Unable to ping database:", err)
 	}
-
 	infoLog.Println("Database connection established")
 
+	//cache
 	templateCache, err := newTemplateCache()
 	if err != nil {
 		errorLog.Fatal(err)
 	}
 
+	//load decoder
 	formDecoder := form.NewDecoder()
 	sessionManager := scs.New()
 	sessionManager.Store = pgxstore.New(pool)
@@ -73,13 +72,18 @@ func main() {
 		sessionManager: sessionManager,
 	}
 
+	tlsConfig := &tls.Config{
+		CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256},
+	}
+
 	srv := &http.Server{
-		Addr:     ":4000",
-		ErrorLog: errorLog,
-		Handler:  app.routes(),
+		Addr:      ":4000",
+		ErrorLog:  errorLog,
+		Handler:   app.routes(),
+		TLSConfig: tlsConfig,
 	}
 
 	infoLog.Printf("Starting server on :4000")
-	err = srv.ListenAndServe()
+	err = srv.ListenAndServeTLS("./tls/cert.pem", "./tls/key.pem")
 	errorLog.Fatal(err)
 }

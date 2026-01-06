@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+tls/
 
 # Build artifacts and temporary files
 tmp/
