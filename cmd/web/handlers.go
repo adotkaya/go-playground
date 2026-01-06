@@ -119,17 +119,18 @@ func (app *application) userLoginPost(w http.ResponseWriter, r *http.Request) {
 			app.render(w, http.StatusUnprocessableEntity, "login.tmpl", data)
 		} else {
 			app.serverError(w, err)
-			return
 		}
-
-		err = app.sessionManager.RenewToken(r.Context())
-		if err != nil {
-			app.serverError(w, err)
-			return
-		}
-
-		app.sessionManager.Put(r.Context(), "authenticatedUserID", id)
+		return
 	}
+
+	err = app.sessionManager.RenewToken(r.Context())
+	if err != nil {
+		app.serverError(w, err)
+		return
+	}
+
+	app.sessionManager.Put(r.Context(), "authenticatedUserID", id)
+
 	http.Redirect(w, r, "/snippet/create", http.StatusSeeOther)
 }
 
@@ -142,9 +143,7 @@ func (app *application) userLogoutPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.sessionManager.Remove(r.Context(), "authenticatedUserID")
-
 	app.sessionManager.Put(r.Context(), "flash", "You've been logged out successfully!")
-
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
