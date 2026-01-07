@@ -18,6 +18,7 @@ func (app *application) routes() http.Handler {
 
 	fileServer := http.FileServer(http.FS(ui.Files))
 	router.Handler(http.MethodGet, "/static/*filepath", http.StripPrefix("/static", fileServer))
+	router.HandlerFunc(http.MethodGet, "/ping", ping)
 
 	/* 	If you’re not using the justinas/alice package to help manage your
 	middleware chains, then you’d need to use the http.HandlerFunc()
