@@ -6,11 +6,17 @@ import (
 	"time"
 )
 
+// =============================================================================
+// Configuration Types
+// =============================================================================
+
+// Config holds all configuration for the application
 type Config struct {
 	Database DatabaseConfig
 	Server   ServerConfig
 }
 
+// DatabaseConfig holds database connection configuration
 type DatabaseConfig struct {
 	User     string
 	Password string
@@ -20,12 +26,17 @@ type DatabaseConfig struct {
 	SSLMode  string
 }
 
+// ServerConfig holds HTTP server configuration
 type ServerConfig struct {
 	Port         string
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
 }
+
+// =============================================================================
+// Configuration Loading
+// =============================================================================
 
 // LoadConfig loads and validates all configuration from environment variables
 func LoadConfig() (*Config, error) {
@@ -75,6 +86,10 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// =============================================================================
+// Configuration Methods
+// =============================================================================
+
 // DSN returns the PostgreSQL connection string
 func (c *DatabaseConfig) DSN() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
@@ -87,7 +102,11 @@ func (c *DatabaseConfig) DSN() string {
 	)
 }
 
-// Helper functions
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+// getEnvOrDefault retrieves an environment variable or returns a default value
 func getEnvOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -95,6 +114,7 @@ func getEnvOrDefault(key, defaultValue string) string {
 	return defaultValue
 }
 
+// parseDurationOrDefault parses a duration from env var or returns a default
 func parseDurationOrDefault(key string, defaultValue time.Duration) time.Duration {
 	if value := os.Getenv(key); value != "" {
 		if duration, err := time.ParseDuration(value); err == nil {

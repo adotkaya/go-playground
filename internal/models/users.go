@@ -12,8 +12,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Define a new User type. Notice how the field names and types align
-// with the columns in the database "users" table?
+// =============================================================================
+// User Model - Type Definitions
+// =============================================================================
+
+// User represents a registered user account
 type User struct {
 	ID             int
 	Name           string
@@ -22,86 +25,100 @@ type User struct {
 	Created        time.Time
 }
 
-// Define a new UserModel type which wraps a database connection pool.
-type UserModel struct {
-	DB *pgxpool.Pool
-}
-
+// UserModelInterface defines the interface for user operations
 type UserModelInterface interface {
 	Insert(name, email, password string) error
 	Authenticate(email, password string) (int, error)
 	Exists(id int) (bool, error)
 }
 
-// We'll use the Insert method to add a new record to the "users" table.
+// UserModel wraps a database connection pool
+type UserModel struct {
+	DB *pgxpool.Pool
+}
+
+// =============================================================================
+// User Model - Methods
+// =============================================================================
+
+// Insert creates a new user account in the database
+//
+// The password will be hashed using bcrypt (cost 12) before storage.
+// Returns ErrDuplicateEmail if the email address is already in use.
 func (m *UserModel) Insert(name, email, password string) error {
-	// Create a bcrypt hash of the plain-text password.
+	// Hash the plain-text password using bcrypt with cost factor 12
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
 		return err
 	}
+
 	stmt := `INSERT INTO users (name, email, hashed_password, created)
-			VALUES($1, $2, $3, CURRENT_TIMESTAMP)`
+             VALUES ($1, $2, $3, CURRENT_TIMESTAMP)`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// Use the Exec() method to insert the user details and hashed password
-	// into the users table.
+	// Attempt to insert the user record
 	_, err = m.DB.Exec(ctx, stmt, name, email, string(hashedPassword))
 	if err != nil {
-		// If this returns an error, we use the errors.As() function to check
-		// whether the error has the type *pgconn.PgError. If it does, the
-		// error will be assigned to the pgError variable. We can then check
-		// whether or not the error relates to our users_uc_email key by
-		// checking if the error code equals 23505 and the contents of the error
-		// message string. If it does, we return an ErrDuplicateEmail error.
+		// Check if the error is a PostgreSQL unique constraint violation
 		var pgError *pgconn.PgError
 		if errors.As(err, &pgError) {
-			if pgError.Code == "23505" &&
-				strings.Contains(pgError.Message, "users_uc_email") {
+			// Error code 23505 is unique_violation
+			// Check if it's specifically for the email constraint
+			if pgError.Code == "23505" && strings.Contains(pgError.Message, "users_uc_email") {
 				return ErrDuplicateEmail
 			}
 		}
 		return err
 	}
+
 	return nil
 }
 
-// We'll use the Authenticate method to verify whether a user exists with
-// the provided email address and password. This will return the relevant
-// user ID if they do.
+// Authenticate verifies user credentials and returns the user ID
+//
+// Returns ErrInvalidCredentials if the email doesn't exist or the password
+// doesn't match. On success, returns the user's ID.
 func (m *UserModel) Authenticate(email, password string) (int, error) {
-
 	var id int
 	var hashedPassword []byte
 
+	// Retrieve the user ID and hashed password for the given email
 	stmt := "SELECT id, hashed_password FROM users WHERE email = $1"
+
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	err := m.DB.QueryRow(ctx, stmt, email).Scan(&id, &hashedPassword)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			// No user found with this email
 			return 0, ErrInvalidCredentials
-		} else {
-			return 0, err
 		}
+		return 0, err
 	}
+
+	// Compare the provided password with the stored hash
 	err = bcrypt.CompareHashAndPassword(hashedPassword, []byte(password))
 	if err != nil {
 		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+			// Password doesn't match
 			return 0, ErrInvalidCredentials
-		} else {
-			return 0, err
 		}
+		return 0, err
 	}
+
+	// Authentication successful
 	return id, nil
 }
 
-// We'll use the Exists method to check if a user exists with a specific ID.
+// Exists checks whether a user with the given ID exists in the database
+//
+// Returns true if the user exists, false otherwise
 func (m *UserModel) Exists(id int) (bool, error) {
 	var exists bool
+
 	stmt := "SELECT EXISTS(SELECT true FROM users WHERE id = $1)"
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
